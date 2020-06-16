@@ -13,6 +13,7 @@ using DatingApp.API.Models;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Options;
 
 namespace DatingApp.API.Controllers
@@ -101,6 +102,41 @@ namespace DatingApp.API.Controllers
             }
 
             return BadRequest("Could not add the photo");
+        }
+
+        [HttpPost("{id}/setMain")]
+        public async Task<IActionResult> SetMainPhoto(int userId, int id)
+        {
+            if (userId != int.Parse(User.FindFirst(ClaimTypes.NameIdentifier).Value))
+            {
+                return Unauthorized();
+            }
+
+            var userFromRepo = await repo.GetUser(userId);
+
+            if (!userFromRepo.Photos.Any(p => p.Id == id))
+            {
+                return Unauthorized();
+            }
+
+            var photoFromRepo = await repo.GetPhoto(id);
+
+            if (photoFromRepo.IsMain)
+            {
+                return BadRequest("This is already the main photo.");
+            }
+
+            var currentMainPhoto = await repo.GetMainPhotoForUser(userId);
+
+            currentMainPhoto.IsMain = false;
+            photoFromRepo.IsMain = true;
+
+            if(await repo.SaveAll())
+            {
+                return NoContent();
+            }
+
+            return BadRequest("Could not set photo to main.");
         }
     }
 }
