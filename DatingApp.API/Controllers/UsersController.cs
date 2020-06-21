@@ -7,6 +7,7 @@ using AutoMapper;
 using DatingApp.API.Data;
 using DatingApp.API.DTOs;
 using DatingApp.API.Helpers;
+using DatingApp.API.Models;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -30,7 +31,7 @@ namespace DatingApp.API.Controllers
         }
 
         [HttpGet]
-        public async Task<IActionResult> GetUsers([FromQuery]UserParams userParams)
+        public async Task<IActionResult> GetUsers([FromQuery] UserParams userParams)
         {
             var currentuserId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier).Value);
 
@@ -47,7 +48,7 @@ namespace DatingApp.API.Controllers
 
             var usersToReturn = mapper.Map<IEnumerable<UserForListDto>>(users);
 
-            Response.AddPagination(users.CurrentPage, 
+            Response.AddPagination(users.CurrentPage,
                 users.PageSize, users.TotalCount, users.TotalPages);
 
             return Ok(usersToReturn);
@@ -66,7 +67,7 @@ namespace DatingApp.API.Controllers
         [HttpPut("{id}")]
         public async Task<IActionResult> UpdateUser(int id, UserForUpdateDto userForUpdateDto)
         {
-            if(id != int.Parse(User.FindFirst(ClaimTypes.NameIdentifier).Value))
+            if (id != int.Parse(User.FindFirst(ClaimTypes.NameIdentifier).Value))
             {
                 return Unauthorized();
             }
@@ -75,12 +76,48 @@ namespace DatingApp.API.Controllers
 
             mapper.Map(userForUpdateDto, userFromRepo);
 
-            if(await repo.SaveAll())
+            if (await repo.SaveAll())
             {
                 return NoContent();
             }
 
             throw new Exception($"Updating user {id} failed on save.");
+        }
+
+        [HttpPost("{userId}/like/{recipientId}")]
+        public async Task<IActionResult> LikeUser(int userId, int recipientId)
+        {
+            if(userId != int.Parse(User.FindFirst(ClaimTypes.NameIdentifier).Value))
+            {
+                return Unauthorized();
+            }
+
+            var like = await repo.GetLike(userId, recipientId);
+
+            if(like != null)
+            {
+                return BadRequest("You already like this user");
+            }
+
+            if(await repo.GetUser(recipientId) == null)
+            {
+                return NotFound();
+            }
+
+            like = new Like
+            {
+                LikerId = userId,
+                LikeeId = recipientId
+            };
+
+            repo.Add<Like>(like);
+
+            if(await repo.SaveAll())
+            {
+                return Ok();
+            }
+
+            return BadRequest("Failed to like user");
         }
     }
 }
